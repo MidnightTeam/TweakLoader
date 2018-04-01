@@ -8,6 +8,7 @@
 #import <sys/types.h>
 
 #define dylibDir @"/usr/lib/tweaks"
+#define safeModePath "/meridian/MeridianSafeMode.dylib"
 
 NSArray *generateDylibList() {
     NSString *processName = [[NSProcessInfo processInfo] processName];
@@ -106,97 +107,6 @@ int file_exist(char *filename) {
     return (r == 0);
 }
 
-/*
- Thanks to @DGh0st on Discord for helping me set up this custom safe mode implementation :)
- */
-
-@interface SBIconController : UIViewController
-+ (id)sharedInstance;
-@end
-
-@interface SBApplication : NSObject
-@property (nonatomic,readonly) int pid;
-@end
-
-@interface SBApplicationController : NSObject
-+(id)sharedInstance;
--(id)applicationWithBundleIdentifier:(id)arg1;
-@end
-
-@interface Main : NSObject
-+ (void)showRespringMessage;
-@end
-
-@implementation Main
-
-+ (void)showRespringMessage {
-    UIViewController *controller = [%c(SBIconController) sharedInstance];
-    
-    NSString *safeModeMessage = [NSString stringWithFormat:@"You are now in safe mode. \n"
-                                 "If this is unusual, just tap 'Respring'. \n"
-                                 "If this has happened multiple times in a row, uninstall any new tweaks which may be causing this issue."];
-    
-    UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Safe Mode"
-                                                                   message:safeModeMessage
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    
-    UIAlertAction* closeAction = [UIAlertAction actionWithTitle:@"Close"
-                                                          style:UIAlertActionStyleDefault
-                                                        handler:nil];
-    
-    UIAlertAction* respringAction = [UIAlertAction actionWithTitle:@"Respring"
-                                                             style:UIAlertActionStyleCancel
-                                                           handler:^(UIAlertAction *action) {
-                                                               [self respring];
-                                                           }];
-    
-    [alert addAction:closeAction];
-    [alert addAction:respringAction];
-    
-    [controller presentViewController:alert animated:YES completion:nil];
-}
-
-+ (void)respring {
-    NSLog(@"Respringing to exit safe mode...");
-    
-    SBApplication *application = [[%c(SBApplicationController) sharedInstance] applicationWithBundleIdentifier:@"com.apple.SpringBoard"];
-    int pid = [application pid];
-    kill(pid, 9);
-}
-
-@end
-
-%group SafeMode
-%hook SBLockScreenViewController
-- (void)finishUIUnlockFromSource:(int)source {
-    %orig;
-    [Main showRespringMessage];
-}
-%end
-
-%hook SBDashBoardViewController
-- (void)finishUIUnlockFromSource:(int)source {
-    %orig;
-    [Main showRespringMessage];
-}
-%end
-
-%hook UIStatusBarTimeItemView
-- (BOOL)updateForNewData:(id)arg1 actions:(int)arg2 {
-    BOOL origValue = %orig;
-    [self setValue:@"Exit Safe Mode" forKey:@"_timeString"];
-    return origValue;
-}
-%end
-
-%hook SpringBoard
-- (void)handleStatusBarTapWithEvent:(id)arg1 {
-    %orig;
-    [Main showRespringMessage];
-}
-%end
-%end
-
 BOOL safeMode = false;
 
 __attribute__ ((constructor))
@@ -226,7 +136,11 @@ static void ctor(void) {
                 if ([NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.apple.springboard"]) {
                     unlink("/var/mobile/.safeMode");
                     NSLog(@"Entering Safe Mode!");
-                    %init(SafeMode);
+                    void *dl = dlopen(safeModePath, RTLD_LAZY | RTLD_GLOBAL);
+
+                    if (dl == NULL) {
+                        NSLog(@"FAILED TO LOAD SAFE MODE! This is a fatal error!");
+                    }
                 }
             }
         }
