@@ -1,11 +1,4 @@
 #import <dlfcn.h>
-#import <objc/runtime.h>
-#import <stdlib.h>
-#import <stdio.h>
-#import <unistd.h>
-#import <pthread.h>
-#import <sys/stat.h>
-#import <sys/types.h>
 
 #define dylibDir        @"/usr/lib/tweaks"
 #define safeModePath    "/meridian/MeridianSafeMode.dylib"
@@ -131,8 +124,13 @@ static void ctor(void) {
     @autoreleasepool {
         safeMode = false;
 
-        NSString *processName = [[NSProcessInfo processInfo] processName];
-        if ([processName isEqualToString:@"backboardd"] || [NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.apple.springboard"]) {
+        NSString  *bundleID = NSBundle.mainBundle.bundleIdentifier;
+        BOOL isSpringBoard = [bundleID isEqualToString:@"com.apple.springboard"];
+        if (isSpringBoard) {
+            %init(SpringBoard);
+        }
+        
+        if ([bundleID isEqualToString:@"com.apple.backboardd"] || isSpringBoard) {
             // Register the signal handler
             struct sigaction action;
             memset(&action, 0, sizeof(action));
@@ -152,7 +150,7 @@ static void ctor(void) {
 
             if (file_exist("/var/mobile/.safeMode")) {
                 safeMode = true;
-                if ([NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.apple.springboard"]) {
+                if (isSpringBoard) {
                     unlink("/var/mobile/.safeMode");
                     NSLog(@"Entering Safe Mode!");
                     void *dl = dlopen(safeModePath, RTLD_LAZY | RTLD_GLOBAL);
@@ -180,11 +178,5 @@ static void ctor(void) {
                 }
             }
         }
-    }
-}
-
-%ctor {
-    if (IN_SPRINGBOARD) {
-        %init(SpringBoard);
     }
 }
