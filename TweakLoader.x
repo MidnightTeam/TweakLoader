@@ -22,7 +22,6 @@ BOOL safeMode = false;
     NSMutableDictionary *envVars = [originalEnv mutableCopy] ?: [NSMutableDictionary dictionary];
 
     NSString *offOrOn = safeMode ? @"1" : @"0";
-    NSLog(@"safemode: %d, off or on: %@", safeMode, offOrOn);
     [envVars setObject:offOrOn forKey:@"_SafeMode"];
     [envVars setObject:offOrOn forKey:@"_MSSafeMode"];
 
