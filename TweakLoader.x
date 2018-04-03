@@ -7,8 +7,30 @@
 #import <sys/stat.h>
 #import <sys/types.h>
 
-#define dylibDir @"/usr/lib/tweaks"
-#define safeModePath "/meridian/MeridianSafeMode.dylib"
+#define dylibDir        @"/usr/lib/tweaks"
+#define safeModePath    "/meridian/MeridianSafeMode.dylib"
+
+BOOL safeMode = false;
+
+%group SpringBoard
+
+%hook SBApplicationInfo
+- (NSDictionary *)environmentVariables {
+    NSLog(@"SBApplicationInfo::envrionmentVariables is called!");
+    NSDictionary *originalEnv = %orig;
+
+    NSMutableDictionary *envVars = [originalEnv mutableCopy] ?: [NSMutableDictionary dictionary];
+
+    NSString *offOrOn = safeMode ? @"1" : @"0";
+    NSLog(@"safemode: %d, off or on: %@", safeMode, offOrOn);
+    [envVars setObject:offOrOn forKey:@"_SafeMode"];
+    [envVars setObject:offOrOn forKey:@"_MSSafeMode"];
+
+    return envVars;
+}
+%end
+
+%end
 
 NSArray *generateDylibList() {
     NSString *processName = [[NSProcessInfo processInfo] processName];
@@ -102,19 +124,17 @@ void SpringBoardSigHandler(int signo, siginfo_t *info, void *uap){
 }
 
 int file_exist(char *filename) {
-    struct stat buffer;
-    int r = stat(filename, &buffer);
-    return (r == 0);
+    return (access(filename, F_OK) == 0);
 }
-
-BOOL safeMode = false;
 
 __attribute__ ((constructor))
 static void ctor(void) {
     @autoreleasepool {
         safeMode = false;
+
         NSString *processName = [[NSProcessInfo processInfo] processName];
         if ([processName isEqualToString:@"backboardd"] || [NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.apple.springboard"]) {
+            // Register the signal handler
             struct sigaction action;
             memset(&action, 0, sizeof(action));
             action.sa_sigaction = &SpringBoardSigHandler;
@@ -144,8 +164,15 @@ static void ctor(void) {
                 }
             }
         }
-
-        if (!safeMode){
+        
+        const char *safeModeEnv   = getenv("_SafeMode");
+        const char *msSafeModeEnv = getenv("_MSSafeMode");
+        if ((safeModeEnv   != NULL && !strcmp(safeModeEnv, "1")) ||
+            (msSafeModeEnv != NULL && !strcmp(msSafeModeEnv, "1"))) {
+            safeMode = true;
+        }
+        
+        if (!safeMode) {
             for (NSString *dylib in generateDylibList()) {
                 void *dl = dlopen([dylib UTF8String], RTLD_LAZY | RTLD_GLOBAL);
 
@@ -154,5 +181,11 @@ static void ctor(void) {
                 }
             }
         }
+    }
+}
+
+%ctor {
+    if (IN_SPRINGBOARD) {
+        %init(SpringBoard);
     }
 }
