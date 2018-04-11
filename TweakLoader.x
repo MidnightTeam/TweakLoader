@@ -1,7 +1,7 @@
 #import <dlfcn.h>
 
 #define dylibDir        @"/usr/lib/tweaks"
-#define safeModePath    "/meridian/MeridianSafeMode.dylib"
+#define safeModePath     "/usr/lib/MeridianSafeMode.dylib"
 
 BOOL safeMode = false;
 
