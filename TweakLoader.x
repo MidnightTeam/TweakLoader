@@ -9,7 +9,6 @@ BOOL safeMode = false;
 
 %hook SBApplicationInfo
 - (NSDictionary *)environmentVariables {
-    NSLog(@"SBApplicationInfo::envrionmentVariables is called!");
     NSDictionary *originalEnv = %orig;
 
     NSMutableDictionary *envVars = [originalEnv mutableCopy] ?: [NSMutableDictionary dictionary];
@@ -124,39 +123,43 @@ static void ctor(void) {
     @autoreleasepool {
         safeMode = false;
 
-        NSString  *bundleID = NSBundle.mainBundle.bundleIdentifier;
-        BOOL isSpringBoard = [bundleID isEqualToString:@"com.apple.springboard"];
-        if (isSpringBoard) {
-            %init(SpringBoard);
-        }
-        
-        if ([bundleID isEqualToString:@"com.apple.backboardd"] || isSpringBoard) {
-            // Register the signal handler
-            struct sigaction action;
-            memset(&action, 0, sizeof(action));
-            action.sa_sigaction = &SpringBoardSigHandler;
-            action.sa_flags = SA_SIGINFO | SA_RESETHAND;
-            sigemptyset(&action.sa_mask);
+        NSBundle *mainBundle = NSBundle.mainBundle;
+        if (mainBundle != nil) {
+            NSString *bundleID = mainBundle.bundleIdentifier;
 
-            sigaction(SIGQUIT, &action, NULL);
-            sigaction(SIGILL, &action, NULL);
-            sigaction(SIGTRAP, &action, NULL);
-            sigaction(SIGABRT, &action, NULL);
-            sigaction(SIGEMT, &action, NULL);
-            sigaction(SIGFPE, &action, NULL);
-            sigaction(SIGBUS, &action, NULL);
-            sigaction(SIGSEGV, &action, NULL);
-            sigaction(SIGSYS, &action, NULL);
+            BOOL isSpringBoard = bundleID != NULL && [bundleID isEqualToString:@"com.apple.springboard"];
+            if (isSpringBoard) {
+                %init(SpringBoard);
+            }
+            
+            if ([bundleID isEqualToString:@"com.apple.backboardd"] || isSpringBoard) {
+                // Register the signal handler
+                struct sigaction action;
+                memset(&action, 0, sizeof(action));
+                action.sa_sigaction = &SpringBoardSigHandler;
+                action.sa_flags = SA_SIGINFO | SA_RESETHAND;
+                sigemptyset(&action.sa_mask);
 
-            if (file_exist("/var/mobile/.safeMode")) {
-                safeMode = true;
-                if (isSpringBoard) {
-                    unlink("/var/mobile/.safeMode");
-                    NSLog(@"Entering Safe Mode!");
-                    void *dl = dlopen(safeModePath, RTLD_LAZY | RTLD_GLOBAL);
+                sigaction(SIGQUIT, &action, NULL);
+                sigaction(SIGILL, &action, NULL);
+                sigaction(SIGTRAP, &action, NULL);
+                sigaction(SIGABRT, &action, NULL);
+                sigaction(SIGEMT, &action, NULL);
+                sigaction(SIGFPE, &action, NULL);
+                sigaction(SIGBUS, &action, NULL);
+                sigaction(SIGSEGV, &action, NULL);
+                sigaction(SIGSYS, &action, NULL);
 
-                    if (dl == NULL) {
-                        NSLog(@"FAILED TO LOAD SAFE MODE! This is a fatal error!");
+                if (file_exist("/var/mobile/.safeMode")) {
+                    safeMode = true;
+                    if (isSpringBoard) {
+                        unlink("/var/mobile/.safeMode");
+                        //NSLog(@"Entering Safe Mode!");
+                        void *dl = dlopen(safeModePath, RTLD_LAZY | RTLD_GLOBAL);
+
+                        if (dl == NULL) {
+                            //NSLog(@"FAILED TO LOAD SAFE MODE! This is a fatal error!");
+                        }
                     }
                 }
             }
