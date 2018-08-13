@@ -121,10 +121,6 @@ int file_exist(char *filename) {
 __attribute__ ((constructor))
 static void ctor(void) {
     @autoreleasepool {
-	#ifndef __arm64__
-	return; // only run on arm64
-	#endif
-
         safeMode = false;
 
         NSBundle *mainBundle = NSBundle.mainBundle;
